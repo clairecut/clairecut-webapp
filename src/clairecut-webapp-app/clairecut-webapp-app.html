@@ -1,0 +1,247 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="../../bower_components/iron-swipeable-container/iron-swipeable-container.html">
+
+<link rel="import" href="../../bower_components/iron-icon/iron-icon.html">
+<link rel="import" href="../../bower_components/iron-icons/communication-icons.html">
+<link rel="import" href="../../bower_components/iron-icons/image-icons.html">
+<link rel="import" href="../../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../../bower_components/paper-fab/paper-fab.html">
+<link rel="import" href="../../bower_components/paper-card/paper-card.html">
+
+<link rel="import" href="../../bower_components/neon-animation/neon-animated-pages.html">
+<link rel="import" href="../../bower_components/neon-animation/neon-animation-runner-behavior.html">
+<link rel="import" href="../../bower_components/neon-animation/animations/slide-left-animation.html">
+<link rel="import" href="../../bower_components/neon-animation/animations/slide-from-right-animation.html">
+
+
+<dom-module id="clairecut-webapp-app">
+    <template>
+        <style>
+            :host {
+                display: block;
+            }
+
+            paper-spinner-lite.orange {
+                --paper-spinner-color: var(--google-yellow-500);
+            }
+
+            .video {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+
+            .btn--back {
+                position: fixed;
+                top: 15px;
+                left: 15px;
+            }
+
+            .btn--snap {
+                position: fixed;
+                bottom: 15px;
+                right: 15px;
+            }
+
+            .btn--change {
+                position: fixed;
+                top: 15px;
+                right: 15px;
+            }
+
+            neon-animated-pages {
+                margin: 0 auto;
+                width: 100vw;
+                height: 100vh;
+                max-width: 966px;
+            }
+
+            neon-animated-pages canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+
+        </style>
+
+        <neon-animated-pages selected="{{selected}}"
+                             attr-for-selected="key"
+                             entry-animation="slide-left-animation"
+                             exit-animation="slide-from-right-animation">
+            <neon-animatable key="camera">
+                <video class="video" autoplay></video>
+                <paper-fab mini raised on-tap="nextDevice" class="btn--change" label="{{devices.length}}">
+                    <iron-icon icon="image:switch-camera"></iron-icon>
+                </paper-fab>
+                <paper-fab raised on-tap="takeImage" class="btn--snap">
+                    <iron-icon icon="image:camera"></iron-icon>
+                </paper-fab>
+            </neon-animatable>
+            <neon-animatable key="image">
+                <paper-fab elevation="5" raised on-tap="back" class="btn--back">
+                    <iron-icon icon="back"></iron-icon>
+                </paper-fab>
+                <div>
+                    <canvas width="480" height="320"></canvas>
+                    <img/>
+                </div>
+                <paper-fab raised on-tap="sendImage" class="btn--snap">
+                    <iron-icon icon="communication:message"></iron-icon>
+                </paper-fab>
+            </neon-animatable>
+            <neon-animatable key="results">
+                <paper-fab elevation="5" raised on-tap="back" class="btn--back">
+                    <iron-icon icon="back"></iron-icon>
+                </paper-fab>
+                <template is="dom-repeat" items="{{pieces}}" as="item">
+                    <div>
+                        <h2>{{item.color}}</h2>
+                        <iron-swipeable-container>
+                            <template is="dom-repeat" items="{{item.images}}" as="image">
+                                <paper-card image="data:image/jpeg;base64,{{image}}"></paper-card>
+                            </template>
+                        </iron-swipeable-container>
+                    </div>
+                </template>
+            </neon-animatable>
+        </neon-animated-pages>
+        <!--<paper-spinner-lite class="orange" active></paper-spinner-lite>-->
+    </template>
+    <script src="../../bower_components/underscore/underscore.js"></script>
+    <script>
+      Polymer({
+        is: 'clairecut-webapp-app',
+        behaviors: [
+          Polymer.NeonAnimationRunnerBehavior
+        ],
+        properties: {
+          mediaStream: {
+            type: Object
+          },
+          selected: {
+            type: String,
+            value: 'camera'
+          },
+          image: {
+            type: String
+          },
+          pieces: {
+            type: Array
+          },
+          devices: {
+            type: Array,
+            value: []
+          },
+          deviceId: {
+            type: String
+          },
+        },
+        ready: function() {
+          var self = this;
+          navigator.mediaDevices.enumerateDevices().then(function(devices) {
+            self.set('devices', _.filter(devices, function(device) {
+              return device.kind === 'videoinput';
+            }));
+            self.startVideo();
+          }).catch(console.error);
+        },
+        startVideo: function(deviceId) {
+          var video = document.querySelector('video');
+          var self = this;
+          navigator.getUserMedia = navigator.getUserMedia ||
+            navigator.webkitGetUserMedia ||
+            navigator.mozGetUserMedia ||
+            navigator.msGetUserMedia;
+
+          if (navigator.getUserMedia) {
+            var constraint = {
+              audio: false,
+              video: true
+            };
+            if (deviceId) {
+              constraint = {
+                audio: false, video: {
+                  deviceId: {exact: deviceId}
+                }
+              };
+            } else if (this.devices.length > 0) {
+              constraint = {
+                audio: false,
+                video: {
+                  deviceId: {
+                    exact: _.last(this.devices).deviceId
+                  }
+                }
+              };
+            }
+            navigator.getUserMedia(constraint, function(stream) {
+              if (self.mediaStream)
+                self.mediaStream = stream;
+              video.src = window.URL.createObjectURL(stream);
+            }, console.error);
+          } else {
+            video.src = 'somevideo.webm';
+          }
+        },
+        takeImage: function() {
+          this.set('selected', 'image');
+          var video = document.querySelector('video');
+          var canvas = document.querySelector('canvas');
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          this.set('image', canvas.toDataURL('image/jpeg').replace('data:image/jpeg;base64,', ''));
+        },
+        sendImage: function() {
+          var self = this; //When can we finally get rid of this shit... ES2015 where art thou?
+          fetch('https://clairecut.tentacula.me/api/v1/submit', {
+            method: 'post',
+            body: JSON.stringify({image: 'data:image/jpeg;base64,' + this.image}),
+            mode: 'cors',
+            headers: new Headers({
+              'Content-Type': 'text/plain'
+            })
+          }).then(function(res) {
+            return res.json();
+          }).then(function(json) {
+            var pieces = _.map(json.pieces, function(value, key) {
+              return {
+                color: key,
+                images: value
+              }
+            });
+            self.set('pieces', pieces);
+            self.set('selected', 'results');
+          }).catch(function(err) {
+            console.error(err);
+          });
+        },
+        back: function() {
+          this.set('selected', 'camera');
+        },
+        nextDevice: function() {
+          if (this.devices.length === 0) {
+            throw new Error('No Camera');
+          }
+          var currentDeviceId = this.deviceId;
+          if (!currentDeviceId) {
+            currentDeviceId = this.devices[0];
+          }
+          var index = _.findIndex(this.devices, function(d) {
+            return d.deviceId === currentDeviceId
+          });
+          if (index + 1 < this.devices.length) {
+            currentDeviceId = this.devices[index + 1].deviceId;
+          } else {
+            currentDeviceId = this.devices[0].deviceId;
+          }
+          this.set('deviceId', currentDeviceId);
+          this.startVideo(currentDeviceId);
+        }
+      });
+    </script>
+</dom-module>

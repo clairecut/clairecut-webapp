@@ -1,0 +1,5 @@
+.idea/
+bower_components/
+build/
+.firebaserc
+firebase.json
